@@ -1,16 +1,17 @@
-﻿#define MyAppName "Discord Conversation Processor"
-#define MyAppExeName "ChatForge-v{#MyAppVersion}-win64-portable.exe"
+#define MyAppName "Discord Conversation Processor"
 #define MyAppVersion "0.0.0"
-#define MyAppId "{{9C6E6E8A-9E2C-4A9E-8B90-76B7D7D3B7E2}}"
+#define MyAppExeName "ChatForge-v" + MyAppVersion + "-win64-portable.exe"
+#define MySetupBase "ChatForge-v" + MyAppVersion + "-win64-setup"
+#define MyAppId "9C6E6E8A-9E2C-4A9E-8B90-76B7D7D3B7E2"
 
 [Setup]
-AppId={#MyAppId}
+AppId={{#MyAppId}}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppName}
 DefaultDirName={commonpf}\Discord Conversation Processor
 DefaultGroupName={#MyAppName}
-OutputBaseFilename=ChatForge-v{#MyAppVersion}-win64-setup
+OutputBaseFilename={#MySetupBase}
 OutputDir=..\..\dist_installer
 SetupIconFile=..\..\exe\app_logo.ico
 Compression=lzma2
@@ -47,7 +48,7 @@ begin
   begin
     if not WizardIsTaskSelected('uninstallentry') then
     begin
-      UninstallKey := ExpandConstant('Software\Microsoft\Windows\CurrentVersion\Uninstall\{{9C6E6E8A-9E2C-4A9E-8B90-76B7D7D3B7E2}}_is1');
+      UninstallKey := ExpandConstant('Software\Microsoft\Windows\CurrentVersion\Uninstall\{{#MyAppId}}_is1');
       RegDeleteKeyIncludingSubkeys(HKLM, UninstallKey);
       RegDeleteKeyIncludingSubkeys(HKCU, UninstallKey);
       UninstallExe := ExpandConstant('{uninstallexe}');
