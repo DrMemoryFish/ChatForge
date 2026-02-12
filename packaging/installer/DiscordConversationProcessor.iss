@@ -48,7 +48,7 @@ begin
   begin
     if not WizardIsTaskSelected('uninstallentry') then
     begin
-      UninstallKey := ExpandConstant('Software\Microsoft\Windows\CurrentVersion\Uninstall\{{#MyAppId}}_is1');
+      UninstallKey := ExpandConstant('Software\Microsoft\Windows\CurrentVersion\Uninstall\' + MyAppId + '_is1');
       RegDeleteKeyIncludingSubkeys(HKLM, UninstallKey);
       RegDeleteKeyIncludingSubkeys(HKCU, UninstallKey);
       UninstallExe := ExpandConstant('{uninstallexe}');
