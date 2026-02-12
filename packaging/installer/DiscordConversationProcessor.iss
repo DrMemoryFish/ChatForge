@@ -41,6 +41,9 @@ Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\ChatForge.exe"; Tasks: de
 Filename: "{app}\ChatForge.exe"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
 
 [Code]
+const
+  MyAppIdConst = '{#MyAppId}';
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   UninstallKey: string;
@@ -51,7 +54,7 @@ begin
   begin
     if not WizardIsTaskSelected('uninstallentry') then
     begin
-      UninstallKey := ExpandConstant('Software\Microsoft\Windows\CurrentVersion\Uninstall\{' + MyAppId + '}_is1');
+      UninstallKey := ExpandConstant('Software\Microsoft\Windows\CurrentVersion\Uninstall\{' + MyAppIdConst + '}_is1');
       RegDeleteKeyIncludingSubkeys(HKLM, UninstallKey);
       RegDeleteKeyIncludingSubkeys(HKCU, UninstallKey);
       UninstallExe := ExpandConstant('{uninstallexe}');
