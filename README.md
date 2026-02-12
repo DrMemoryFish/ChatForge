@@ -1,31 +1,42 @@
-﻿# Discord Conversation Processor
+# Discord Conversation Processor
 
 [![Release](https://img.shields.io/github/v/release/DrMemoryFish/ChatForge)](https://github.com/DrMemoryFish/ChatForge/releases)
 
-A production‑grade desktop app that unifies Discord conversation export, processing, and preview into a single workflow. It replaces multi‑tool manual steps with one cohesive, secure UI.
+A production-grade desktop app that unifies Discord conversation export, processing, and preview into a single workflow. It replaces multi-tool manual steps with one cohesive, secure UI.
 
 ## Highlights
 - Secure token handling with optional OS keychain storage.
 - Hierarchical conversation discovery: DMs and Servers/Channels.
 - Filter by before/after date and time.
 - Export JSON, formatted TXT, and attachments.
-- Non‑blocking async processing with progress indicator.
-- In‑app formatted preview.
-- Real‑time Logs tab with filtering, search, and copy controls.
+- Non-blocking async processing with progress indicator.
+- In-app formatted preview.
+- Real-time Logs tab with filtering, search, and copy controls.
 
 ## Requirements
-- Windows 10/11 (tested)
-- Python 3.11+ recommended
+- Windows 10/11
 - Internet access to Discord API
 
-## Install
+## Download & Install
+1. Go to the [Releases](https://github.com/DrMemoryFish/ChatForge/releases) tab and download the latest build.
+2. Choose one option:
+3. Portable EXE: run `ChatForge-v<version>-win64-portable.exe` directly. No install required.
+4. Installer EXE: run `ChatForge-v<version>-win64-setup.exe` and follow the wizard.
+
+**No Python is required for the prebuilt EXEs.**
+
+## Build From Source
+### Requirements
+- Python 3.11+ recommended
+
+### Install
 ```powershell
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Run
+### Run
 ```powershell
 python -m app.main
 ```
@@ -48,7 +59,7 @@ Output:
 - `dist/ChatForge-v<version>-win64-portable.exe`
 
 ### 2) Installer EXE (Inno Setup)
-Install **Inno Setup 6** and ensure `ISCC.exe` is available.  
+Install **Inno Setup 6** and ensure `ISCC.exe` is available.
 If it is not in the default path, set:
 ```powershell
 $env:INNO_SETUP_COMPILER = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
@@ -79,19 +90,22 @@ Replace that file to update the portable EXE, installer icon, and shortcuts.
 
 ## Export Options
 - **Export JSON**: raw Discord message payloads.
-- **Export formatted TXT**: human‑readable transcript (see format below).
+- **Export formatted TXT**: human-readable transcript (see format below).
 - **Export attachments/assets**: downloads message attachments.
 - **Include edited timestamps**: appends edited time to header.
 - **Include pinned markers**: adds `[PINNED]` prefix to headers.
 - **Include reply references**: adds reply block with resolved original message.
 
 ## Output Location
-The output path is determined by the **Output folder** and **Base filename** fields in the Export panel.
+Exports are saved under `exports/` and organized by chat type.
 
-Examples (default base filename `discord_export`):
-- JSON: `output/discord_export.json`
-- TXT: `output/discord_export.txt`
-- Attachments: `output/discord_export_attachments/`
+Default folders:
+- `exports/DMs/`
+- `exports/Servers/<Server Name>/`
+
+Filenames include filters and export time for uniqueness:
+- `Direct_Message [20260106-20260211] [08:00-23:59] [Exported 20260211_1530].txt`
+- `ServerName #general [20260101-20260211] [00:00-23:59] [Exported 20260211_1535].json`
 
 ## Filter Behavior
 Filters are optional and use your local timezone.
@@ -115,7 +129,7 @@ Formatting rules:
 The Logs tab streams internal events in real time and supports:
 - Level filter (INFO/WARNING/ERROR/DEBUG)
 - Text search
-- Auto‑scroll toggle
+- Auto-scroll toggle
 - Copy selected entry
 - Clear logs
 
@@ -123,10 +137,11 @@ A rotating log file is also written to:
 - `logs/discordsorter.log`
 
 ## Security Notes
-Your token is treated like a password. This app never sends it to third‑party services.
+Your token is treated like a password. This app never sends it to third-party services.
 
 - If **Remember token** is **off**, the token is **not stored** on disk; it exists only in memory for the current session.
 - If **Remember token** is **on**, the token is stored using your OS keychain via the `keyring` library.
+- **Using a Discord user token may violate Discord’s Terms of Service. Use responsibly and at your own risk.**
 
 ### Where It’s Stored (Windows)
 When **Remember token** is enabled on Windows, the token is saved to **Windows Credential Manager**.
@@ -161,7 +176,7 @@ This app uses a Discord **user token**. Only use your own account and handle it 
 - **“Token invalid” or 401 errors**
   The token is incorrect or expired.
 - **Windows warns on first run**
-  The portable/installer EXEs are not code‑signed yet, so Windows SmartScreen may show a warning. This is expected for unsigned builds.
+  The portable/installer EXEs are not code-signed yet, so Windows SmartScreen may show a warning. This is expected for unsigned builds.
 - **Rate limiting**
   The app automatically retries after Discord’s `retry_after` delay.
 - **Missing channels**
