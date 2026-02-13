@@ -45,10 +45,9 @@ jobs:
         shell: pwsh
         run: |
           python -m venv .venv
-          .\.venv\Scripts\Activate.ps1
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements-dev.txt
+          .\.venv\Scripts\python.exe -m pip install --upgrade pip
+          .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+          .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 
       - name: Install Inno Setup
         shell: pwsh
@@ -287,7 +286,13 @@ jobs:
       - name: Publish GitHub release assets
         uses: softprops/action-gh-release@v2
         with:
-          files: release-assets/*
+          files: |
+            release-assets/ArchiveCord-v${{ env.RELEASE_VERSION }}-win64-portable.exe
+            release-assets/ArchiveCord-v${{ env.RELEASE_VERSION }}-win64-setup.exe
+            release-assets/ArchiveCord-v${{ env.RELEASE_VERSION }}-macos-universal.dmg
+            release-assets/ArchiveCord-v${{ env.RELEASE_VERSION }}-macos-universal.zip
+            release-assets/ArchiveCord-v${{ env.RELEASE_VERSION }}-linux-x86_64.AppImage
+            release-assets/ArchiveCord-v${{ env.RELEASE_VERSION }}-linux-x86_64.tar.gz
           fail_on_unmatched_files: true
 
       - name: Notes for future signing
