@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   prepare:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       release_version: ${{ steps.version.outputs.release_version }}
     steps:
@@ -160,7 +160,7 @@ jobs:
             dist/ArchiveCord-v${{ env.RELEASE_VERSION }}-macos-universal.zip
 
   build_linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: prepare
     env:
       RELEASE_VERSION: ${{ needs.prepare.outputs.release_version }}
@@ -201,7 +201,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
+          .venv/bin/python - <<'PY'
           import os
           import subprocess
           import sys
@@ -247,7 +247,7 @@ jobs:
             dist/ArchiveCord-v${{ env.RELEASE_VERSION }}-linux-x86_64.tar.gz
 
   publish:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs:
       - prepare
       - build_windows
