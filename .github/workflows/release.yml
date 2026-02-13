@@ -263,7 +263,7 @@ jobs:
           merge-multiple: true
           path: release-assets
 
-      - name: Verify release payload
+      - name: Normalize and verify release payload
         shell: bash
         run: |
           set -euo pipefail
@@ -276,11 +276,25 @@ jobs:
             "ArchiveCord-v${RELEASE_VERSION}-linux-x86_64.tar.gz"
           )
           for file in "${required[@]}"; do
+            mapfile -t matches < <(find release-assets -type f -name "${file}" -print)
+            if [[ ${#matches[@]} -eq 0 ]]; then
+              echo "Missing release asset anywhere under release-assets/: ${file}" >&2
+              exit 1
+            fi
+            if [[ ${#matches[@]} -gt 1 ]]; then
+              echo "Duplicate release assets found for ${file}:" >&2
+              printf ' - %s\n' "${matches[@]}" >&2
+              exit 1
+            fi
+            if [[ "${matches[0]}" != "release-assets/${file}" ]]; then
+              cp "${matches[0]}" "release-assets/${file}"
+            fi
             if [[ ! -f "release-assets/${file}" ]]; then
               echo "Missing release asset: release-assets/${file}" >&2
               exit 1
             fi
           done
+          find release-assets -mindepth 1 -type d -empty -delete
           ls -lh release-assets
 
       - name: Publish GitHub release assets
