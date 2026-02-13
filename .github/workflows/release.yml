@@ -85,9 +85,7 @@ jobs:
         with:
           name: release-windows
           if-no-files-found: error
-          path: |
-            release-flat/ArchiveCord-v${{ env.RELEASE_VERSION }}-win64-portable.exe
-            release-flat/ArchiveCord-v${{ env.RELEASE_VERSION }}-win64-setup.exe
+          path: release-flat/*
 
   build_macos:
     runs-on: macos-latest
@@ -172,9 +170,7 @@ jobs:
         with:
           name: release-macos
           if-no-files-found: error
-          path: |
-            release-flat/ArchiveCord-v${{ env.RELEASE_VERSION }}-macos-universal.dmg
-            release-flat/ArchiveCord-v${{ env.RELEASE_VERSION }}-macos-universal.zip
+          path: release-flat/*
 
   build_linux:
     runs-on: ubuntu-22.04
@@ -267,9 +263,7 @@ jobs:
         with:
           name: release-linux
           if-no-files-found: error
-          path: |
-            release-flat/ArchiveCord-v${{ env.RELEASE_VERSION }}-linux-x86_64.AppImage
-            release-flat/ArchiveCord-v${{ env.RELEASE_VERSION }}-linux-x86_64.tar.gz
+          path: release-flat/*
 
   publish:
     runs-on: ubuntu-22.04
