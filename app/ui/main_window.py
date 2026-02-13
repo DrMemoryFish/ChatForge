@@ -96,7 +96,7 @@ class MainWindow(QMainWindow):
         self._startup_warnings = startup_warnings or (defaults.warnings if defaults else ())
         self._settings = QSettings("ArchiveCord", "ArchiveCord")
         self._resolved_export_root = self._default_export_root
-        self._export_root_source = "default"
+        self._export_root_source = "default-platformdirs"
 
         self._conversation_worker: ConversationWorker | None = None
         self._export_worker: ExportWorker | None = None
@@ -362,19 +362,19 @@ class MainWindow(QMainWindow):
             self._set_output_dir_value(path)
             is_custom = self._resolved_export_root != self._default_export_root
             self._persist_output_dir(self._resolved_export_root, is_custom=is_custom)
-            self._export_root_source = "user-defined" if is_custom else "default"
+            self._export_root_source = "user-defined" if is_custom else "default-platformdirs"
 
     def on_output_dir_edited(self) -> None:
         typed = self.output_dir_input.text().strip()
         if not typed:
             self._set_output_dir_value(self._default_export_root)
             self._persist_output_dir(self._resolved_export_root, is_custom=False)
-            self._export_root_source = "default"
+            self._export_root_source = "default-platformdirs"
             return
         self._set_output_dir_value(typed)
         is_custom = self._resolved_export_root != self._default_export_root
         self._persist_output_dir(self._resolved_export_root, is_custom=is_custom)
-        self._export_root_source = "user-defined" if is_custom else "default"
+        self._export_root_source = "user-defined" if is_custom else "default-platformdirs"
 
     def _normalize_path(self, value: str) -> str:
         return os.path.abspath(os.path.normpath(value))
@@ -410,18 +410,7 @@ class MainWindow(QMainWindow):
             legacy_ok, _ = ensure_writable_directory(legacy_default)
             if legacy_ok:
                 self._set_output_dir_value(legacy_default)
-                self._export_root_source = "legacy-default"
-                self._persist_output_dir(self._resolved_export_root, is_custom=False)
-                return
-            self._logger.warning(
-                "Previous default export root was not writable. Switching to user-writable default."
-            )
-
-        if not is_custom and os.path.isdir(legacy_default):
-            legacy_ok, _ = ensure_writable_directory(legacy_default)
-            if legacy_ok:
-                self._set_output_dir_value(legacy_default)
-                self._export_root_source = "legacy-default"
+                self._export_root_source = "legacy-from-settings-cwd"
                 self._persist_output_dir(self._resolved_export_root, is_custom=False)
                 return
             self._logger.warning(
@@ -429,24 +418,24 @@ class MainWindow(QMainWindow):
             )
 
         self._set_output_dir_value(self._default_export_root)
-        self._export_root_source = "default"
+        self._export_root_source = "default-platformdirs"
         self._persist_output_dir(self._resolved_export_root, is_custom=False)
 
     def _log_path_resolution(self) -> None:
         for warning in self._startup_warnings:
             self._logger.warning(warning)
 
-        export_suffix = {
-            "user-defined": " (user-defined)",
-            "legacy-default": " (legacy default)",
-            "default": " (default)",
-        }.get(self._export_root_source, " (default)")
-        if self._export_root_source == "default" and self._export_default_fallback_used:
-            export_suffix = " (default, fallback)"
+        export_rule = {
+            "user-defined": "user-defined",
+            "legacy-from-settings-cwd": "legacy from settings: cwd/exports",
+            "default-platformdirs": "default via platformdirs",
+        }.get(self._export_root_source, "default via platformdirs")
+        if self._export_root_source == "default-platformdirs" and self._export_default_fallback_used:
+            export_rule = "default via platformdirs (fallback)"
 
         logs_suffix = " (default, fallback)" if self._logs_fallback_used else " (default)"
 
-        self._logger.info("Export root resolved to: %s%s", self._resolved_export_root, export_suffix)
+        self._logger.info("Output root: %s (%s)", self._resolved_export_root, export_rule)
         self._logger.info("Logs path resolved to: %s%s", self._logs_dir, logs_suffix)
 
     def _item_data(self, item: QTreeWidgetItem) -> dict:
@@ -898,7 +887,9 @@ class MainWindow(QMainWindow):
             output_root,
             is_custom=(output_root != self._default_export_root),
         )
-        self._export_root_source = "user-defined" if output_root != self._default_export_root else "default"
+        self._export_root_source = (
+            "user-defined" if output_root != self._default_export_root else "default-platformdirs"
+        )
 
         root_ok, root_error = ensure_writable_directory(output_root)
         if not root_ok:
