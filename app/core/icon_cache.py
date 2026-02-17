@@ -9,7 +9,7 @@ from collections import OrderedDict
 import requests
 from platformdirs import user_cache_dir
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 
 from app.core.paths import APP_NAME
 
