@@ -27,8 +27,23 @@ class ConversationWorker(QThread):
             me = client.validate_token()
             self.status.emit("Loading conversations...")
             logger.info("Loading DMs and guilds.")
-            dms = client.get_dms()
+            raw_dms = client.get_dms()
             guilds = client.get_guilds()
+
+            dm_entries: List[Dict] = []
+            for dm in raw_dms:
+                recipients = dm.get("recipients") or []
+                first_recipient = recipients[0] if recipients else {}
+                dm_entries.append(
+                    {
+                        "id": dm.get("id"),
+                        "name": dm.get("name"),
+                        "recipients": recipients,
+                        "icon_user_id": first_recipient.get("id"),
+                        "icon_avatar": first_recipient.get("avatar"),
+                        "icon_discriminator": first_recipient.get("discriminator"),
+                    }
+                )
 
             guild_entries: List[Dict] = []
             for guild in guilds:
@@ -46,12 +61,13 @@ class ConversationWorker(QThread):
                     {
                         "id": guild["id"],
                         "name": guild.get("name", "Unknown Server"),
+                        "icon_hash": guild.get("icon"),
                         "channels": sorted(visible_channels, key=lambda c: c.get("position", 0)),
                         "channels_error": channels_error,
                     }
                 )
 
-            payload = {"me": me, "dms": dms, "guilds": guild_entries}
+            payload = {"me": me, "dms": dm_entries, "guilds": guild_entries}
             self.result.emit(payload)
             logger.info("Conversation load complete.")
         except DiscordAPIError as exc:

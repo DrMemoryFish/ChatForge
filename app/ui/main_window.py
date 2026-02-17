@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 
 from PySide6.QtCore import QDate, QSettings, QTime, Qt, QUrl, Signal
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QDesktopServices, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -29,6 +29,17 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.models import ExportOptions
+from app.core.icon_cache import (
+    IconCache,
+    build_default_avatar_url,
+    build_dm_avatar_url,
+    build_guild_icon_url,
+    default_avatar_index,
+    placeholder_category_icon,
+    placeholder_channel_icon,
+    placeholder_dm_icon,
+    placeholder_guild_icon,
+)
 from app.core.paths import ensure_writable_directory, resolve_default_paths
 from app.core.token_store import TokenStoreError, delete_token, keyring_available, load_token, save_token
 from app.core.utils import build_dt, ensure_dir, sanitize_path_segment
@@ -108,6 +119,13 @@ class MainWindow(QMainWindow):
         self._is_export_running = False
         self._batch_cancel_requested = False
         self._logger = logging.getLogger("discordsorter.ui")
+        self._icon_cache = IconCache()
+        self._icon_cache.icon_ready.connect(self.on_icon_ready)
+        self._icon_items: dict[str, list[QTreeWidgetItem]] = {}
+        self._dm_fallback_icon: QIcon = placeholder_dm_icon()
+        self._guild_fallback_icon: QIcon = placeholder_guild_icon()
+        self._channel_fallback_icon: QIcon = placeholder_channel_icon()
+        self._category_fallback_icon: QIcon = placeholder_category_icon()
 
         self._build_ui()
         self._configure_token_persistence()
@@ -478,6 +496,82 @@ class MainWindow(QMainWindow):
         if reason_suffix and reason_suffix not in text:
             item.setText(0, f"{text} {reason_suffix}")
         self._set_item_unavailable(item, payload)
+
+    def _reset_icon_bindings(self) -> None:
+        self._icon_items.clear()
+
+    def _track_item_icon_key(self, key: str, item: QTreeWidgetItem) -> None:
+        if not key:
+            return
+        self._icon_items.setdefault(key, []).append(item)
+
+    def _apply_cached_or_request_icon(
+        self, item: QTreeWidgetItem, *, key: str | None, url: str | None, fallback: QIcon
+    ) -> None:
+        item.setIcon(0, fallback)
+        if not key:
+            return
+        self._track_item_icon_key(key, item)
+        cached = self._icon_cache.get_icon(key)
+        if cached:
+            item.setIcon(0, cached)
+            return
+        self._icon_cache.request_icon(key, url)
+
+    def on_icon_ready(self, key: str, icon_obj: object) -> None:
+        if not isinstance(icon_obj, QIcon):
+            return
+        items = self._icon_items.get(key, [])
+        if not items:
+            return
+
+        still_alive: list[QTreeWidgetItem] = []
+        for item in items:
+            if item.treeWidget() is self.tree:
+                item.setIcon(0, icon_obj)
+                still_alive.append(item)
+        if still_alive:
+            self._icon_items[key] = still_alive
+        else:
+            self._icon_items.pop(key, None)
+
+    def _resolve_dm_icon(self, dm: dict) -> tuple[str | None, str | None]:
+        user_id = dm.get("icon_user_id")
+        avatar_hash = dm.get("icon_avatar")
+        discriminator = dm.get("icon_discriminator")
+
+        if not user_id:
+            recipients = dm.get("recipients") or []
+            first_recipient = recipients[0] if recipients else {}
+            user_id = first_recipient.get("id")
+            avatar_hash = avatar_hash or first_recipient.get("avatar")
+            discriminator = discriminator or first_recipient.get("discriminator")
+
+        if user_id and avatar_hash:
+            return (
+                f"dm:{user_id}:{avatar_hash}",
+                build_dm_avatar_url(str(user_id), str(avatar_hash)),
+            )
+
+        index = default_avatar_index(
+            str(user_id) if user_id else None,
+            str(discriminator) if discriminator else None,
+        )
+        return (
+            f"dm-default:{user_id or 'unknown'}:{index}",
+            build_default_avatar_url(index),
+        )
+
+    def _resolve_guild_icon(self, guild: dict) -> tuple[str | None, str | None]:
+        guild_id = guild.get("id")
+        icon_hash = guild.get("icon_hash")
+        if guild_id and icon_hash:
+            return (
+                f"guild:{guild_id}:{icon_hash}",
+                build_guild_icon_url(str(guild_id), str(icon_hash)),
+            )
+        return None, None
+
     def on_connect(self) -> None:
         token = self._validated_token()
         self._logger.info("Connect initiated.")
@@ -492,6 +586,7 @@ class MainWindow(QMainWindow):
         self.set_status("Connecting...", connected=False)
         self.connect_button.setEnabled(False)
         self._tree_syncing = True
+        self._reset_icon_bindings()
         self.tree.clear()
         self._tree_syncing = False
         self.preview.clear()
@@ -534,6 +629,7 @@ class MainWindow(QMainWindow):
 
         self._tree_syncing = True
         self.tree.setUpdatesEnabled(False)
+        self._reset_icon_bindings()
         self.tree.clear()
 
         dms_root = QTreeWidgetItem(["Direct Messages"])
@@ -545,6 +641,7 @@ class MainWindow(QMainWindow):
             name = self._dm_name(dm)
             dm_item = QTreeWidgetItem([name])
             channel_id = dm.get("id")
+            dm_icon_key, dm_icon_url = self._resolve_dm_icon(dm)
             dm_payload = {
                 "node_kind": NODE_KIND_DM,
                 "type": "dm",
@@ -553,6 +650,12 @@ class MainWindow(QMainWindow):
                 "stable_id": f"dm:{channel_id}" if channel_id else "",
                 "exportable": bool(channel_id),
             }
+            self._apply_cached_or_request_icon(
+                dm_item,
+                key=dm_icon_key,
+                url=dm_icon_url,
+                fallback=self._dm_fallback_icon,
+            )
             if channel_id:
                 self._set_leaf_item_checkable(dm_item, dm_payload)
             else:
@@ -569,6 +672,13 @@ class MainWindow(QMainWindow):
             guild_name = guild.get("name", "Unknown Server")
             guild_id = guild.get("id")
             guild_item = QTreeWidgetItem([guild_name])
+            guild_icon_key, guild_icon_url = self._resolve_guild_icon(guild)
+            self._apply_cached_or_request_icon(
+                guild_item,
+                key=guild_icon_key,
+                url=guild_icon_url,
+                fallback=self._guild_fallback_icon,
+            )
             self._set_parent_item_checkable(
                 guild_item,
                 {
@@ -589,6 +699,7 @@ class MainWindow(QMainWindow):
                 category_name = category.get("name") or "Unnamed Category"
                 category_id = category.get("id")
                 category_item = QTreeWidgetItem([category_name])
+                category_item.setIcon(0, self._category_fallback_icon)
                 self._set_parent_item_checkable(
                     category_item,
                     {
@@ -609,6 +720,7 @@ class MainWindow(QMainWindow):
                 channel_id = channel.get("id")
                 parent_id = channel.get("parent_id")
                 channel_item = QTreeWidgetItem([f"# {channel_name}"])
+                channel_item.setIcon(0, self._channel_fallback_icon)
                 channel_payload = {
                     "node_kind": NODE_KIND_CHANNEL,
                     "type": "guild",
@@ -634,6 +746,7 @@ class MainWindow(QMainWindow):
             channels_error = guild.get("channels_error")
             if channels_error:
                 unavailable = QTreeWidgetItem(["Channels unavailable (permission/API error)"])
+                unavailable.setIcon(0, self._channel_fallback_icon)
                 self._set_item_unavailable(
                     unavailable,
                     {
