@@ -152,7 +152,6 @@ class MainWindow(QMainWindow):
         self.status_dot.setProperty("connected", False)
 
         self.status_label = QLabel("Disconnected")
-        self.connected_user_label = QLabel(self.tr("Connected as: -"))
 
         top_bar.addWidget(self.token_input, 3)
         top_bar.addWidget(self.remember_token, 1)
@@ -160,7 +159,6 @@ class MainWindow(QMainWindow):
         top_bar.addSpacing(10)
         top_bar.addWidget(self.status_dot)
         top_bar.addWidget(self.status_label)
-        top_bar.addWidget(self.connected_user_label)
 
         root_layout.addLayout(top_bar)
 
@@ -378,12 +376,6 @@ class MainWindow(QMainWindow):
             self.status_dot.style().unpolish(self.status_dot)
             self.status_dot.style().polish(self.status_dot)
             self.connect_button.setText(self.tr("Reconnect") if connected else self.tr("Connect"))
-
-    def _set_connected_user_label(self, username: str | None) -> None:
-        if username:
-            self.connected_user_label.setText(self.tr("Connected as: {username}").format(username=username))
-            return
-        self.connected_user_label.setText(self.tr("Connected as: -"))
 
     def _load_show_ids_tooltips_preference(self) -> None:
         raw = self._settings.value("ui/show_ids_tooltips", None)
@@ -686,7 +678,6 @@ class MainWindow(QMainWindow):
         self._tree_syncing = False
         self.preview.clear()
         self._selected_targets = []
-        self._set_connected_user_label(None)
         self._refresh_tree_counts()
         self._update_selection_ui()
 
@@ -704,7 +695,7 @@ class MainWindow(QMainWindow):
                 pass
 
         self._conversation_worker = ConversationWorker(token)
-        self._conversation_worker.status.connect(lambda msg: self.set_status(msg, connected=False))
+        self._conversation_worker.status.connect(self._logger.info)
         self._conversation_worker.error.connect(self.on_conversation_error)
         self._conversation_worker.result.connect(self.on_conversations_loaded)
         self._conversation_worker.finished.connect(lambda: self.connect_button.setEnabled(True))
@@ -712,16 +703,14 @@ class MainWindow(QMainWindow):
         self._logger.info("Conversation load started.")
 
     def on_conversation_error(self, message: str) -> None:
-        self.set_status(message, connected=False)
-        self._set_connected_user_label(None)
+        self.set_status(self.tr("Disconnected"), connected=False)
         self.connect_button.setEnabled(True)
         self._logger.error("Conversation load failed: %s", message)
 
     def on_conversations_loaded(self, payload: dict) -> None:
         self._connected_user = payload.get("me")
         user_label = self._connected_user.get("username", "Unknown") if self._connected_user else "Unknown"
-        self.set_status(f"Connected as {user_label}", connected=True)
-        self._set_connected_user_label(user_label)
+        self.set_status(self.tr("Connected as {username}").format(username=user_label), connected=True)
         dm_entries = payload.get("dms", [])
         guild_entries = payload.get("guilds", [])
         dm_count = len(dm_entries)
