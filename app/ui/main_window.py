@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 
 from PySide6.QtCore import QDate, QSettings, QTime, Qt, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QIcon
+from PySide6.QtGui import QAction, QDesktopServices, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -19,9 +19,11 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
+    QMenu,
     QSplitter,
     QTabWidget,
     QTimeEdit,
+    QToolButton,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -175,9 +177,19 @@ class MainWindow(QMainWindow):
         self.search_input.textChanged.connect(self.filter_tree)
 
         self.selection_count_label = QLabel("0 items selected")
-        self.show_ids_tooltips_toggle = QCheckBox(self.tr("Show IDs in tooltips"))
-        self._load_show_ids_tooltips_preference()
-        self.show_ids_tooltips_toggle.toggled.connect(self.on_show_ids_tooltips_toggled)
+        show_ids_tooltips = self._load_show_ids_tooltips_preference()
+        self.show_ids_tooltips_action = QAction(self.tr("Show IDs in tooltips"), self)
+        self.show_ids_tooltips_action.setCheckable(True)
+        self.show_ids_tooltips_action.setChecked(show_ids_tooltips)
+        self.show_ids_tooltips_action.toggled.connect(self.on_show_ids_tooltips_toggled)
+        self.search_settings_menu = QMenu(self)
+        self.search_settings_menu.addAction(self.show_ids_tooltips_action)
+        self.search_settings_button = QToolButton()
+        self.search_settings_button.setText("⚙")
+        self.search_settings_button.setToolTip(self.tr("Conversation list settings"))
+        self.search_settings_button.setPopupMode(QToolButton.InstantPopup)
+        self.search_settings_button.setMenu(self.search_settings_menu)
+        self.search_settings_button.setAutoRaise(True)
 
         self.tree = ConversationTreeWidget()
         self.tree.setHeaderHidden(True)
@@ -186,9 +198,13 @@ class MainWindow(QMainWindow):
         self.tree.itemChanged.connect(self.on_tree_item_changed)
         self.tree.toggle_requested.connect(self.on_tree_toggle_requested)
 
-        left_layout.addWidget(self.search_input)
+        search_row = QHBoxLayout()
+        search_row.setSpacing(6)
+        search_row.addWidget(self.search_input, 1)
+        search_row.addWidget(self.search_settings_button)
+
+        left_layout.addLayout(search_row)
         left_layout.addWidget(self.selection_count_label)
-        left_layout.addWidget(self.show_ids_tooltips_toggle)
         left_layout.addWidget(self.tree, 1)
 
         right_panel = QWidget()
@@ -370,25 +386,30 @@ class MainWindow(QMainWindow):
         self._logger.warning("Remember token disabled: %s", reason or "keyring unavailable")
 
     def set_status(self, message: str, connected: bool | None = None) -> None:
-        self.status_label.setText(message)
-        if connected is not None:
-            self.status_dot.setProperty("connected", connected)
-            self.status_dot.style().unpolish(self.status_dot)
-            self.status_dot.style().polish(self.status_dot)
-            self.connect_button.setText(self.tr("Reconnect") if connected else self.tr("Connect"))
+        del connected
+        self.statusBar().showMessage(message)
 
-    def _load_show_ids_tooltips_preference(self) -> None:
+    def set_connection_status(
+        self,
+        *,
+        connected: bool,
+        state_message: str,
+    ) -> None:
+        self.status_label.setText(state_message)
+        self.status_dot.setProperty("connected", connected)
+        self.status_dot.style().unpolish(self.status_dot)
+        self.status_dot.style().polish(self.status_dot)
+        self.connect_button.setText(self.tr("Reconnect") if connected else self.tr("Connect"))
+
+    def _load_show_ids_tooltips_preference(self) -> bool:
         raw = self._settings.value("ui/show_ids_tooltips", None)
         if raw is None:
-            self.show_ids_tooltips_toggle.setChecked(True)
-            return
+            return True
         if isinstance(raw, bool):
-            self.show_ids_tooltips_toggle.setChecked(raw)
-            return
+            return raw
         if isinstance(raw, str):
-            self.show_ids_tooltips_toggle.setChecked(raw.strip().lower() in {"1", "true", "yes", "on"})
-            return
-        self.show_ids_tooltips_toggle.setChecked(bool(raw))
+            return raw.strip().lower() in {"1", "true", "yes", "on"}
+        return bool(raw)
 
     def on_show_ids_tooltips_toggled(self, checked: bool) -> None:
         self._settings.setValue("ui/show_ids_tooltips", bool(checked))
@@ -520,7 +541,7 @@ class MainWindow(QMainWindow):
             visit(self.tree.topLevelItem(i))
 
     def _apply_item_tooltip(self, item: QTreeWidgetItem) -> None:
-        if not self.show_ids_tooltips_toggle.isChecked():
+        if not self.show_ids_tooltips_action.isChecked():
             item.setToolTip(0, "")
             return
         payload = self._item_data(item)
@@ -668,7 +689,7 @@ class MainWindow(QMainWindow):
         if self._is_export_running:
             return
 
-        self.set_status("Connecting...", connected=False)
+        self.set_connection_status(connected=False, state_message=self.tr("Connecting..."))
         self.connect_button.setEnabled(False)
         self._tree_syncing = True
         self._reset_icon_bindings()
@@ -703,14 +724,18 @@ class MainWindow(QMainWindow):
         self._logger.info("Conversation load started.")
 
     def on_conversation_error(self, message: str) -> None:
-        self.set_status(self.tr("Disconnected"), connected=False)
+        self.set_status(message)
+        self.set_connection_status(connected=False, state_message=self.tr("Disconnected"))
         self.connect_button.setEnabled(True)
         self._logger.error("Conversation load failed: %s", message)
 
     def on_conversations_loaded(self, payload: dict) -> None:
         self._connected_user = payload.get("me")
         user_label = self._connected_user.get("username", "Unknown") if self._connected_user else "Unknown"
-        self.set_status(self.tr("Connected as {username}").format(username=user_label), connected=True)
+        self.set_connection_status(
+            connected=True,
+            state_message=self.tr("Connected as {username}").format(username=user_label),
+        )
         dm_entries = payload.get("dms", [])
         guild_entries = payload.get("guilds", [])
         dm_count = len(dm_entries)
@@ -924,7 +949,6 @@ class MainWindow(QMainWindow):
         data = self._item_data(item)
         channel_id = data.get("channel_id")
         if channel_id:
-            self.set_status(f"Selected channel {channel_id}", connected=True)
             self._logger.debug("Channel focused: %s", channel_id)
 
     def on_tree_item_pressed(self, item: QTreeWidgetItem, column: int) -> None:
@@ -1094,18 +1118,18 @@ class MainWindow(QMainWindow):
         targets = self._collect_checked_targets()
         if not targets:
             self._logger.warning("Export blocked: no checked items.")
-            self.set_status("Select at least one DM or channel", connected=True)
+            self.set_status("Select at least one DM or channel")
             return
 
         if not (self.export_json.isChecked() or self.export_txt.isChecked() or self.export_attachments.isChecked()):
             self._logger.warning("Export blocked: no export format selected.")
-            self.set_status("Select at least one export option", connected=True)
+            self.set_status("Select at least one export option")
             return
 
         output_root = self.output_dir_input.text().strip()
         if not output_root:
             self._logger.warning("Export blocked: output directory missing.")
-            self.set_status("Output folder required", connected=True)
+            self.set_status("Output folder required")
             return
         self._set_output_dir_value(output_root)
         output_root = self._resolved_export_root
@@ -1120,13 +1144,13 @@ class MainWindow(QMainWindow):
         root_ok, root_error = ensure_writable_directory(output_root)
         if not root_ok:
             self._logger.error("Export blocked: output root not writable. %s", root_error)
-            self.set_status("Output folder is not writable. Choose another folder.", connected=True)
+            self.set_status("Output folder is not writable. Choose another folder.")
             return
 
         logs_ok, logs_error = ensure_writable_directory(self._logs_dir)
         if not logs_ok:
             self._logger.error("Export blocked: logs path not writable. %s", logs_error)
-            self.set_status("Logs folder is not writable. Export blocked.", connected=True)
+            self.set_status("Logs folder is not writable. Export blocked.")
             return
 
         before_dt = None
@@ -1182,7 +1206,7 @@ class MainWindow(QMainWindow):
         self._set_progress_active_single()
         self.cancel_button.setVisible(False)
         self.preview.clear()
-        self.set_status("Exporting...", connected=True)
+        self.set_status("Exporting...")
         self._logger.info(
             "Export started. Channel=%s JSON=%s TXT=%s Attachments=%s",
             target.options.channel_id,
@@ -1192,7 +1216,7 @@ class MainWindow(QMainWindow):
         )
 
         self._export_worker = ExportWorker(token, target.options)
-        self._export_worker.status.connect(lambda msg: self.set_status(msg, connected=True))
+        self._export_worker.status.connect(self.set_status)
         self._export_worker.preview.connect(self.preview.setPlainText)
         self._export_worker.error.connect(self.on_export_error)
         self._export_worker.finished.connect(self.on_export_finished)
@@ -1210,11 +1234,11 @@ class MainWindow(QMainWindow):
         self.preview.clear()
         self.cancel_button.setVisible(True)
         self.cancel_button.setEnabled(True)
-        self.set_status(f"Batch export started ({len(targets)} items)", connected=True)
+        self.set_status(f"Batch export started ({len(targets)} items)")
         self._logger.info("Batch export requested for %s items.", len(targets))
 
         self._batch_worker = BatchExportWorker(token, targets)
-        self._batch_worker.status.connect(lambda msg: self.set_status(msg, connected=True))
+        self._batch_worker.status.connect(self.set_status)
         self._batch_worker.preview.connect(self.preview.setPlainText)
         self._batch_worker.item_started.connect(self.on_batch_item_started)
         self._batch_worker.batch_progress.connect(self.on_batch_progress)
@@ -1246,13 +1270,13 @@ class MainWindow(QMainWindow):
         self.cancel_button.setEnabled(False)
         self._batch_worker.cancel()
         self._logger.warning("Batch cancellation requested by user.")
-        self.set_status("Cancellation requested. Current item will finish.", connected=True)
+        self.set_status("Cancellation requested. Current item will finish.")
 
     def on_batch_error(self, message: str) -> None:
         self._is_export_running = False
         self._set_progress_idle()
         self.cancel_button.setVisible(False)
-        self.set_status(message, connected=True)
+        self.set_status(message)
         self._logger.error("Batch export failed: %s", message)
         self._update_selection_ui()
 
@@ -1281,7 +1305,7 @@ class MainWindow(QMainWindow):
             if result.cancelled
             else f"Batch export complete | Attempted: {result.attempted} | Success: {result.succeeded} | Failed: {result.failed}"
         )
-        self.set_status(status, connected=True)
+        self.set_status(status)
 
         if self.open_folder_toggle.isChecked() and result.last_success:
             target = (
@@ -1298,7 +1322,7 @@ class MainWindow(QMainWindow):
         self._is_export_running = False
         self._set_progress_idle()
         self.cancel_button.setVisible(False)
-        self.set_status(message, connected=True)
+        self.set_status(message)
         self._logger.error("Export failed: %s", message)
         self._update_selection_ui()
 
@@ -1313,7 +1337,7 @@ class MainWindow(QMainWindow):
             status_parts.append(f"TXT: {result.txt_path}")
         if result.attachments_dir:
             status_parts.append(f"Attachments: {result.attachments_saved}")
-        self.set_status(" | ".join(status_parts), connected=True)
+        self.set_status(" | ".join(status_parts))
         self._logger.info("Export completed successfully.")
         if self.open_folder_toggle.isChecked():
             target = result.txt_path or result.json_path or result.attachments_dir
@@ -1393,11 +1417,11 @@ class MainWindow(QMainWindow):
         token = self.token_input.text().strip()
         if not token:
             self._logger.warning("Token missing.")
-            self.set_status("Token required", connected=False)
+            self.set_status("Token required")
             return None
         if any(ch.isspace() for ch in token):
             self._logger.warning("Token contains whitespace or line breaks.")
-            self.set_status("Token must be a single line with no spaces.", connected=False)
+            self.set_status("Token must be a single line with no spaces.")
             return None
         return token
 
