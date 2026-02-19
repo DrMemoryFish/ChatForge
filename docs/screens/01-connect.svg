@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect width="1280" height="720" fill="#1f2937"/>
+  <rect x="48" y="48" width="1184" height="624" rx="12" fill="#111827" stroke="#374151"/>
+  <text x="80" y="120" fill="#f9fafb" font-family="Segoe UI, Arial, sans-serif" font-size="34">Placeholder Screenshot</text>
+  <text x="80" y="174" fill="#9ca3af" font-family="Segoe UI, Arial, sans-serif" font-size="24">01-connect.svg</text>
+  <text x="80" y="238" fill="#d1d5db" font-family="Segoe UI, Arial, sans-serif" font-size="22">Replace with real UI capture before final docs merge.</text>
+</svg>
